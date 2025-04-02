@@ -1,0 +1,107 @@
+plugins {
+    id 'java'
+    id 'java-library'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+wrapper {
+    gradleVersion = '8.2.1'
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+project.ext {
+    baseArtifact = 'wiremock-extension'
+    versions = [
+            wiremock         : '3.2.0',
+            handlebars       : '4.3.1',
+            junit            : '5.10.0',
+            assertj          : '3.24.2',
+            restAssured      : '5.3.2',
+            awaitility       : '4.2.0',
+            projectlombok    : '1.18.28',
+            javaxvalidation  : '2.0.1.Final',
+            minidev          : '2.5.0',
+            junitdataprovider: '1.13.1'
+    ]
+}
+
+project.archivesBaseName = "${baseArtifact}"
+configurations {
+    standaloneOnly
+}
+
+jar {
+    archiveBaseName.set("${baseArtifact}")
+    exclude 'META-INF/services'
+}
+
+shadowJar {
+    archiveBaseName.set("${baseArtifact}-standalone")
+    archiveClassifier.set('')
+    configurations = [
+            project.configurations.runtimeClasspath,
+            project.configurations.standaloneOnly
+    ]
+
+    with copySpec {
+        from("shadowjar/resources") {}
+    }
+
+    dependencies {
+        exclude(dependency('junit:junit'))
+    }
+
+    mergeServiceFiles()
+
+    exclude 'META-INF/maven/**'
+    exclude 'module-info.class'
+    exclude 'handlebars-*.js'
+}
+
+group 'org.wiremock'
+
+dependencies {
+    implementation("org.wiremock:wiremock:${versions.wiremock}")
+    implementation("com.github.jknack:handlebars-helpers:${versions.handlebars}") {
+        exclude group: 'org.mozilla', module: 'rhino'
+    }
+
+    testImplementation(platform("org.junit:junit-bom:${versions.junit}"))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testImplementation("org.assertj:assertj-core:${versions.assertj}")
+    testImplementation(platform("io.rest-assured:rest-assured-bom:${versions.restAssured}"))
+    testImplementation("io.rest-assured:rest-assured")
+    testImplementation("org.awaitility:awaitility:${versions.awaitility}")
+    testImplementation("org.projectlombok:lombok:${versions.projectlombok}")
+    compileOnly("org.projectlombok:lombok:${versions.projectlombok}")
+    annotationProcessor("org.projectlombok:lombok:${versions.projectlombok}")
+    testCompileOnly("org.projectlombok:lombok:${versions.projectlombok}")
+    testAnnotationProcessor("org.projectlombok:lombok:${versions.projectlombok}")
+    implementation(group: 'javax.validation', name: 'validation-api', version: "${versions.javaxvalidation}")
+    implementation("net.minidev:json-smart:${versions.minidev}")
+    testImplementation(group: 'com.tngtech.java', name: 'junit-dataprovider', version: "${versions.junitdataprovider}")
+}
+
+sourceCompatibility = 11
+targetCompatibility = 11
+
+compileJava {
+    options.encoding = 'UTF-8'
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+}
+assemble.dependsOn jar, shadowJar
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}

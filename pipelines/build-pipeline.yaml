@@ -1,0 +1,92 @@
+#pool:
+#  name: dev
+#
+#trigger:
+#  branches:
+#    include:
+#      - master
+#      - initial
+#      - "*"
+#
+#parameters:
+#  - name: version
+#    displayName: 'Version Increment Type'
+#    type: string
+#    values:
+#      - major
+#      - minor
+#      - patch
+#      - ' '
+#    default: ' '
+#
+#  - name: ServiceName
+#    type: string
+#    default: 'idt-wiremock-extensions'
+#
+#variables:
+#  - group: Nexus
+#  - name: image_tag
+#    value: initialValue
+#
+#stages:
+#  - stage: BuildAndDeploy
+#    displayName: Build and Deploy Gradle Project
+#    jobs:
+#      - job: Build
+#        displayName: Conditional Docker Build and Push
+#        steps:
+#          - checkout: self
+#            fetchTags: true
+#            fetchDepth: 0
+#
+#          - bash: |
+#              echo "Branch name: $(Build.SourceBranchName)"
+#              export BUILD_NUMBER=$(Build.BuildId)
+#              export DIR_PATH=${AGENT_BUILDDIRECTORY}
+#              export SERVICE_NAME=${{ parameters.ServiceName }}
+#              export NEXUS_REPO=${{ parameters.ServiceName }}
+#              export NEXUS_REPO=${NEXUS_REPO}
+#              echo "##vso[task.setvariable variable=nexus_repo]maven-releases"
+#              echo "##vso[task.setvariable variable=nexus_repo]${NEXUS_REPO}"
+#              cp -r /usr/local/share/ca-certificates/idt.local-CA.pem ${AGENT_BUILDDIRECTORY}/s/idt.local-CA.crt
+#            displayName: 'Show Branch Name'
+#
+#          - bash: |
+#              chmod 755 pipelines/version.sh
+#              export VERSION_TYPE=${{ parameters.version }}
+#              source ./pipelines/version.sh -v ${{ parameters.version }}
+#              echo "##vso[task.setvariable variable=artefact_version]${RELEASE_VERSION_NUMBER}"
+#              echo "##vso[task.setvariable variable=RELEASE_VERSION_NUMBER]$RELEASE_VERSION_NUMBER"
+#            displayName: 'Set version'
+#            condition: not(eq('${{ parameters.version }}', ' '))
+#          # Build with Dockerfile for master and initial*
+#          - bash: |
+#              echo "Building with Dockerfile for branch $(Build.SourceBranchName)"
+#              docker build --file Dockerfile \
+#                           --build-arg CERTIFICATE_FILE=idt.local-CA.crt \
+#                           --build-arg NEXUS_USER=$(NEXUS_USER) \
+#                           --build-arg NEXUS_PASSWORD="$(NEXUS_PASSWORD)" \
+#                           --build-arg RELEASE_VERSION_NUMBER="$(RELEASE_VERSION_NUMBER)" \
+#                           --build-arg WORKSPACE=${AGENT_BUILDDIRECTORY} \
+#                           --build-arg RELEASE_VERSION_NUMBER_SNAPSHOT=$(RELEASE_VERSION_NUMBER)-SNAPSHOT .
+#            displayName: 'Build Docker Image with Dockerfile'
+#            condition: and(or(eq(variables['Build.SourceBranchName'], 'master'), eq(variables['Build.SourceBranchName'], 'initial')), not(eq('${{ parameters.version }}', ' ')))
+#
+#          # Build with build.Dockerfile for other branches
+#          - bash: |
+#              echo "Building with build.Dockerfile for branch $(Build.SourceBranchName)"
+#              docker build --file build.Dockerfile \
+#                           --build-arg CERTIFICATE_FILE=idt.local-CA.crt \
+#                           --build-arg NEXUS_USER=$(NEXUS_USER) \
+#                           --build-arg NEXUS_PASSWORD="$(NEXUS_PASSWORD)" \
+#                           --build-arg WORKSPACE=${AGENT_BUILDDIRECTORY} .
+#            displayName: 'Build Docker Image with build.Dockerfile'
+#            condition: eq('${{ parameters.version }}', ' ')
+#
+#          # Push Docker Image (for all branches)
+##          - bash: |
+##              echo "Pushing Docker image for branch $(Build.SourceBranchName)"
+##              docker push $(nexus_url_automation_images)$(NEXUS_REPO):$(RELEASE_VERSION_NUMBER)
+##              docker push $(nexus_url_automation_images)$(NEXUS_REPO):latest
+##            displayName: 'Push Docker Image'
+##            condition: or(eq(variables['Build.SourceBranchName'], 'master'), startsWith(variables['Build.SourceBranchName'], 'initia'))
